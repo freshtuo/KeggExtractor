@@ -12,6 +12,7 @@ Created on Thu Dec 13 14:30:16 2018
 import sys
 import urllib2
 from re import search
+from time import sleep
 
 # functions
 def digestHtml(thtml):
@@ -28,7 +29,7 @@ def digestHtml(thtml):
 			break
 		if search("^\S", tline):# start of a block
 			tloc.append(k)
-	print len(tloc)-1,"blocks detected."
+	#print len(tloc)-1,"blocks detected."
 	# extract header for each block and save corresponding info
 	tretdic = {}
 	for k in xrange(len(tloc)-1):# each block
@@ -40,7 +41,7 @@ def digestHtml(thtml):
 		binfo.extend([x.strip() for x in tdata[tloc[k]+1:tloc[k+1]]])
 		# add to dictionary
 		if bid.strip() in tretdic:
-			print "Warning: un-unique block ids found:", bid
+			#print "Warning: un-unique block ids found:", bid
 			tretdic[bid].extend(binfo)
 			##sys.exit(1)
 		else:
@@ -53,27 +54,69 @@ def getGenes(tbdic):
 	if "GENE" not in tbdic:
 		print "Error: failed to find GENE block."
 		sys.exit(2)
-	print len(tbdic["GENE"]),"entries in GENE block."
+	#print len(tbdic["GENE"]),"entries in GENE block."
+	# check if gene names are available
+	tmiss = [x.split()[0] for x in tbdic["GENE"] if ";" not in x]
+	if tmiss:
+		print "Warning: missing gene names for",",".join(tmiss),"please manually correct them!"
 	# collect gene names
 	return [x.split(";")[0].split()[-1] for x in tbdic["GENE"]]
+
+def getName(tbdic):
+	# extract pathway name
+	# locate NAME block
+	if "NAME" not in tbdic:
+		print "Error: failed to find NAME block."
+		sys.exit(3)
+	return tbdic["NAME"][0]
+
+def processPathway(tkgid, tsp):
+	# download pathway data and extract name & genes
+	tgenes = []
+	tname = ''
+	try:
+		print "processing %s%s..."%(sp,kgid),
+		url = "http://rest.kegg.jp/get/%s%s"%(tsp,tkgid)
+		uf = urllib2.urlopen(url)
+		html = uf.read()
+		blocks = digestHtml(html)
+		#print len(blocks),"blocks loaded."
+		tgenes = getGenes(blocks)
+		#print len(genes), "genes extracted."
+		tname = getName(blocks)
+		print "ok."
+	except urllib2.HTTPError as e:
+		print e.code, e.reason, ":", e.url
+	# wait 5 seconds before connecting again
+	sleep(5)
+	return (tname,tgenes)
 
 # main
 # species: 'hsa' for human; 'ko' for general pathways
 sp = "hsa"
 # KEGG id
-kgid = "03015"
+#kgid = "03015"
+# a set of pathways
+pathwayfile = "eg/pathways.txt"
+# output folder
+outdir = "info/"
+# outfile
+outfile = outdir+"KEGG.selected_pathways.genes.txt"
 
-# url for the given query
-url = "http://rest.kegg.jp/get/%s%s"%(sp,kgid)
+# read in pathways
+fin = file(pathwayfile,'r')
+pathways = [[y.strip() for y in x.split("\t")] for x in fin.readlines()]
+fin.close()
+print len(pathways),"pathways to process."
 
-try:
-	uf = urllib2.urlopen(url)
-	html = uf.read()
-	blocks = digestHtml(html)
-	print len(blocks),"blocks loaded."
-	genes = getGenes(blocks)
-	print len(genes), "genes extracted."
-except urllib2.HTTPError as e:
-	print e.code, e.reason, ":", e.url
+# extract gene names in each pathway and write to file
+fout = file(outfile,'w')
+for kgid, des in pathways:
+	pname, pgenes = processPathway(kgid, sp)
+	# double check pathway name
+	if pname != '' and pname.split(" - ")[0].strip() != des:
+		print "pathway name not matched:", des, pname.split("-")[0].strip()
+	fout.write("%s%s\t%s\t%d\t%s\n"%(sp,kgid,pname,len(pgenes)," ".join(pgenes)))
+fout.close()
 
 print "Complete!"
