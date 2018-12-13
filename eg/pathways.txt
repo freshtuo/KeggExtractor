@@ -35,7 +35,7 @@
 04390	Hippo signaling pathway
 04370	VEGF signaling pathway
 04371	Apelin signaling pathway
-04630	Jak-STAT signaling pathway
+04630	JAK-STAT signaling pathway
 04064	NF-kappa B signaling pathway
 04668	TNF signaling pathway
 04066	HIF-1 signaling pathway
